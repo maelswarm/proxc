@@ -208,26 +208,30 @@ void *connection_handler(void *socket_desc)
     printf("Host: %s, Port %s\n", host, prt);
 
     //----------------------------------------------
-
-    struct sockaddr_in6 serv_addr;
-    struct hostent *server;
     
     //Sockets Layer Call: socket()
-    sockfd = socket(AF_INET6, SOCK_STREAM, 0);
-    if (sockfd < 0)
-        error("ERROR opening socket");
 
-    //Sockets Layer Call: getaddrbyhost6() gethostbyname2()
-    memset((char *) &serv_addr, 0, sizeof(serv_addr));
-    serv_addr.sin6_flowinfo = 0;
-    serv_addr.sin6_family = AF_INET6;
-    printf("%s,\n", getaddrbyhost6(host));
-    inet_pton(AF_INET6, getaddrbyhost6(host), &serv_addr.sin6_addr);
-    serv_addr.sin6_port = htons(atoi(prt));
-    printf("Here\n");
-    //Sockets Layer Call: connect()
-    if (connect(sockfd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0) {
-        error("ERROR connecting");
+    struct addrinfo hints, *servinfo, *p;
+    int rv;
+    memset(&hints, 0, sizeof hints);
+    hints.ai_family = AF_UNSPEC; // use AF_INET6 to force IPv6
+    hints.ai_socktype = SOCK_STREAM;
+    if ((rv = getaddrinfo(host, prt, &hints, &servinfo)) != 0) {
+        fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
+    }
+    // loop through all the results and connect to the first we can
+    for(p = servinfo; p != NULL; p = p->ai_next) {
+        if ((sockfd = socket(p->ai_family, p->ai_socktype,
+            p->ai_protocol)) == -1) {
+            perror("socket");
+            continue;
+        }
+        if (connect(sockfd, p->ai_addr, p->ai_addrlen) == -1) {
+            perror("connect");
+            close(sockfd);
+            continue;
+        }
+        break; // if we get here, we must have connected successfully
     }
 
     } else {
@@ -269,7 +273,7 @@ int main(int argc, char *argv[]) {
     char client_addr_ipv6[100];
 
     printf("\nIPv6 TCP Server Started...\n");
-    getaddrbyhost6("google.com");
+    
     //Sockets Layer Call: socket()
     sockfd = socket(AF_INET6, SOCK_STREAM, IPPROTO_TCP);
     if (sockfd < 0) {
